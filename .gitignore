@@ -1,0 +1,23 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Coverage / profiling output
+*.out
+*.prof
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Built example binaries
+/bin/
+
+# Bloom filter data files produced by examples/tests
+*.blmf
