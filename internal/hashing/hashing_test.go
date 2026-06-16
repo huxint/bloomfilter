@@ -1,6 +1,10 @@
 package hashing
 
-import "testing"
+import (
+	"encoding/binary"
+	"hash/fnv"
+	"testing"
+)
 
 // Pin a known deterministic output so persisted filters stay reloadable across
 // builds/processes. (FNV-1a-128 of the empty input, run through splitmix64.)
@@ -20,6 +24,28 @@ func TestFNV128aDeterministic(t *testing.T) {
 	c1, c2 := FNV128a{}.Hash128([]byte("bob"))
 	if a1 == c1 && a2 == c2 {
 		t.Fatal("different inputs should (almost surely) differ")
+	}
+}
+
+func TestFNV128aMatchesStandardLibrary(t *testing.T) {
+	for _, input := range [][]byte{
+		nil,
+		{},
+		[]byte("alice"),
+		[]byte("bob"),
+		[]byte("https://example.com/path?q=1"),
+		[]byte{0, 1, 2, 3, 4, 5, 254, 255},
+	} {
+		h := fnv.New128a()
+		_, _ = h.Write(input)
+		sum := h.Sum(nil)
+		want1 := mix64(binary.BigEndian.Uint64(sum[0:8]))
+		want2 := mix64(binary.BigEndian.Uint64(sum[8:16]))
+
+		got1, got2 := FNV128a{}.Hash128(input)
+		if got1 != want1 || got2 != want2 {
+			t.Fatalf("Hash128(%q) = (%#x, %#x), want (%#x, %#x)", input, got1, got2, want1, want2)
+		}
 	}
 }
 
