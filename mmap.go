@@ -44,9 +44,18 @@ func CreateMmap(path string, kind Kind, n uint64, p float64) (MmapFilter, error)
 	if !ok {
 		return nil, ErrUnknownKind
 	}
-	m, k := optimalParams(n, p)
-	dataLen := expectedDataLen(m, cellBits)
-	size := headerSize + int(dataLen)
+	m, k, err := optimalParams(n, p)
+	if err != nil {
+		return nil, err
+	}
+	dataLen, err := checkedDataLen(m, cellBits)
+	if err != nil {
+		return nil, err
+	}
+	size, err := checkedFileSize(dataLen)
+	if err != nil {
+		return nil, err
+	}
 
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0o644)
 	if err != nil {
@@ -95,7 +104,11 @@ func OpenMmap(path string, readOnly bool) (MmapFilter, error) {
 		f.Close()
 		return nil, err
 	}
-	size := headerSize + int(h.dataLen)
+	size, err := checkedFileSize(h.dataLen)
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
 	if fi.Size() < int64(size) {
 		f.Close()
 		return nil, ErrCorrupt

@@ -52,6 +52,18 @@ func TestParseHeaderErrors(t *testing.T) {
 		t.Fatal("inconsistent dataLen must be ErrCorrupt")
 	}
 
+	// k==0 would make MightContain return true for every key.
+	zeroK := header{kind: KindBloom, cellBits: 1, m: 64, k: 0, dataLen: 8}.marshal()
+	if _, err := parseHeader(zeroK); !errors.Is(err, ErrCorrupt) {
+		t.Fatal("k==0 must be ErrCorrupt")
+	}
+
+	// Constructors never produce k>m; reject it as inconsistent/corrupt.
+	hugeK := header{kind: KindBloom, cellBits: 1, m: 64, k: 65, dataLen: 8}.marshal()
+	if _, err := parseHeader(hugeK); !errors.Is(err, ErrCorrupt) {
+		t.Fatal("k>m must be ErrCorrupt")
+	}
+
 	// non-default hashID is unsupported.
 	badHash := header{kind: KindBloom, hashID: 9, cellBits: 1, m: 64, k: 7, dataLen: 8}.marshal()
 	if _, err := parseHeader(badHash); !errors.Is(err, ErrHasherMismatch) {

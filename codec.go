@@ -23,7 +23,10 @@ var (
 	ErrCorrupt        = errors.New("bloomfilter: corrupt or inconsistent data")
 	ErrHasherMismatch = errors.New("bloomfilter: unsupported hasher id")
 	ErrUnknownKind    = errors.New("bloomfilter: unknown filter kind")
+	ErrTooLarge       = errors.New("bloomfilter: filter too large")
 )
+
+var maxInt = int(^uint(0) >> 1)
 
 // header is the fixed on-disk/in-buffer metadata preceding the cell data.
 type header struct {
@@ -39,6 +42,27 @@ type header struct {
 // expectedDataLen returns ceil(m*cellBits/8).
 func expectedDataLen(m uint64, cellBits uint8) uint64 {
 	return (m*uint64(cellBits) + 7) / 8
+}
+
+func checkedDataLen(m uint64, cellBits uint8) (uint64, error) {
+	if cellBits == 0 || m > (math.MaxUint64-7)/uint64(cellBits) {
+		return 0, ErrTooLarge
+	}
+	return expectedDataLen(m, cellBits), nil
+}
+
+func checkedInt(n uint64) (int, error) {
+	if n > uint64(maxInt) {
+		return 0, ErrTooLarge
+	}
+	return int(n), nil
+}
+
+func checkedFileSize(dataLen uint64) (int, error) {
+	if dataLen > uint64(maxInt-headerSize) {
+		return 0, ErrTooLarge
+	}
+	return headerSize + int(dataLen), nil
 }
 
 // marshal renders the header into a headerSize-byte buffer (little-endian).
@@ -94,6 +118,9 @@ func parseHeader(b []byte) (header, error) {
 	if h.m == 0 || h.m > (math.MaxUint64-7)/uint64(h.cellBits) {
 		return header{}, ErrCorrupt
 	}
+	if h.k == 0 || h.k > h.m {
+		return header{}, ErrCorrupt
+	}
 	if h.dataLen != expectedDataLen(h.m, h.cellBits) {
 		return header{}, ErrCorrupt
 	}
@@ -145,11 +172,15 @@ func decodeInto(c *core, data []byte, wantKind Kind) error {
 	if h.kind != wantKind {
 		return ErrCorrupt
 	}
-	if uint64(len(data)) < uint64(headerSize)+h.dataLen {
+	if h.dataLen > uint64(len(data)-headerSize) {
 		return ErrCorrupt
 	}
-	region := make([]byte, h.dataLen)
-	copy(region, data[headerSize:uint64(headerSize)+h.dataLen])
+	size, err := checkedInt(h.dataLen)
+	if err != nil {
+		return err
+	}
+	region := make([]byte, size)
+	copy(region, data[headerSize:headerSize+size])
 	setCore(c, h, storage.WrapMem(region))
 	return nil
 }
@@ -182,6 +213,9 @@ func readFrom(c *core, r io.Reader, wantKind Kind) (int64, error) {
 	}
 	if h.kind != wantKind {
 		return total, ErrCorrupt
+	}
+	if _, err := checkedInt(h.dataLen); err != nil {
+		return total, err
 	}
 	// Read incrementally through a LimitReader rather than make([]byte, dataLen):
 	// a corrupt header can claim an enormous dataLen, and eagerly allocating it

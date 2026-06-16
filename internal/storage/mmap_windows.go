@@ -26,7 +26,10 @@ func (r *mmapRegion) Sync() error {
 	if r.readOnly {
 		return nil
 	}
-	return windows.FlushViewOfFile(r.addr, uintptr(len(r.full)))
+	if err := windows.FlushViewOfFile(r.addr, uintptr(len(r.full))); err != nil {
+		return err
+	}
+	return windows.FlushFileBuffers(windows.Handle(r.file.Fd()))
 }
 
 func (r *mmapRegion) Close() error {

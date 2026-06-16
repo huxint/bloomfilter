@@ -1,6 +1,7 @@
 package bloomfilter
 
 import (
+	"errors"
 	"math"
 	"testing"
 )
@@ -9,7 +10,7 @@ func TestValidate(t *testing.T) {
 	if err := validate(0, 0.01); err == nil {
 		t.Fatal("n=0 must error")
 	}
-	for _, p := range []float64{0, 1, -0.1, 1.5} {
+	for _, p := range []float64{0, 1, -0.1, 1.5, math.NaN(), math.Inf(1), math.Inf(-1)} {
 		if err := validate(100, p); err == nil {
 			t.Fatalf("p=%v must error", p)
 		}
@@ -22,7 +23,10 @@ func TestValidate(t *testing.T) {
 func TestOptimalParams(t *testing.T) {
 	// 1,000,000 items @ 1% → ~9.585 bits/item ≈ 9_585_059 bits,
 	// rounded up to a multiple of 64; k ≈ 7.
-	m, k := optimalParams(1_000_000, 0.01)
+	m, k, err := optimalParams(1_000_000, 0.01)
+	if err != nil {
+		t.Fatalf("optimalParams: %v", err)
+	}
 	if m%64 != 0 {
 		t.Fatalf("m must be a multiple of 64, got %d", m)
 	}
@@ -37,8 +41,17 @@ func TestOptimalParams(t *testing.T) {
 
 func TestOptimalParamsFloorsK(t *testing.T) {
 	// Pathological tiny m/n still yields k>=1.
-	_, k := optimalParams(1_000_000, 0.99)
+	_, k, err := optimalParams(1_000_000, 0.99)
+	if err != nil {
+		t.Fatalf("optimalParams: %v", err)
+	}
 	if k < 1 {
 		t.Fatalf("k must be >= 1, got %d", k)
+	}
+}
+
+func TestOptimalParamsRejectsTooLarge(t *testing.T) {
+	if _, _, err := optimalParams(math.MaxUint64, 0.01); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("huge filter must be ErrTooLarge, got %v", err)
 	}
 }

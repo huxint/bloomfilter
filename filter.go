@@ -55,7 +55,7 @@ func validate(n uint64, p float64) error {
 	if n == 0 {
 		return errors.New("bloomfilter: n must be > 0")
 	}
-	if p <= 0 || p >= 1 {
+	if math.IsNaN(p) || p <= 0 || p >= 1 {
 		return errors.New("bloomfilter: p must be in (0,1)")
 	}
 	return nil
@@ -63,18 +63,29 @@ func validate(n uint64, p float64) error {
 
 // optimalParams derives m (rounded up to a multiple of 64) and k from the
 // expected element count n and target false-positive rate p.
-func optimalParams(n uint64, p float64) (m, k uint64) {
+func optimalParams(n uint64, p float64) (m, k uint64, err error) {
 	mf := -float64(n) * math.Log(p) / (math.Ln2 * math.Ln2)
+	maxUint64Float := math.Ldexp(1, 64)
+	if math.IsNaN(mf) || math.IsInf(mf, 0) || mf <= 0 || mf >= maxUint64Float {
+		return 0, 0, ErrTooLarge
+	}
 	m = uint64(math.Ceil(mf))
 	if rem := m % 64; rem != 0 {
+		if m > math.MaxUint64-(64-rem) {
+			return 0, 0, ErrTooLarge
+		}
 		m += 64 - rem
 	}
 	if m == 0 {
 		m = 64
 	}
-	k = uint64(math.Round(float64(m) / float64(n) * math.Ln2))
+	kf := float64(m) / float64(n) * math.Ln2
+	if math.IsNaN(kf) || math.IsInf(kf, 0) || kf >= maxUint64Float {
+		return 0, 0, ErrTooLarge
+	}
+	k = uint64(math.Round(kf))
 	if k < 1 {
 		k = 1
 	}
-	return m, k
+	return m, k, nil
 }

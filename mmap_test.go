@@ -1,6 +1,7 @@
 package bloomfilter
 
 import (
+	"errors"
 	"os"
 	"strconv"
 	"testing"
@@ -83,5 +84,23 @@ func TestOpenMmapBadFile(t *testing.T) {
 	}
 	if _, err := OpenMmap(path, true); err == nil {
 		t.Fatal("OpenMmap on garbage must error")
+	}
+}
+
+func TestOpenMmapRejectsZeroK(t *testing.T) {
+	path := t.TempDir() + "/zerok.blmf"
+	data := append(header{kind: KindBloom, cellBits: 1, m: 64, k: 0, dataLen: 8}.marshal(), make([]byte, 8)...)
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := OpenMmap(path, true); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("OpenMmap with k==0 must be ErrCorrupt, got %v", err)
+	}
+}
+
+func TestCreateMmapRejectsTooLarge(t *testing.T) {
+	path := t.TempDir() + "/huge.blmf"
+	if _, err := CreateMmap(path, KindBloom, ^uint64(0), 0.01); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("CreateMmap huge filter must be ErrTooLarge, got %v", err)
 	}
 }

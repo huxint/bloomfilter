@@ -1,6 +1,7 @@
 package bloomfilter
 
 import (
+	"errors"
 	"strconv"
 	"testing"
 )
@@ -16,6 +17,12 @@ func TestBloomNewValidation(t *testing.T) {
 	m, k := f.Params()
 	if m == 0 || k == 0 {
 		t.Fatalf("bad params m=%d k=%d", m, k)
+	}
+}
+
+func TestBloomNewRejectsTooLarge(t *testing.T) {
+	if _, err := New(^uint64(0), 0.01); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("New huge filter must be ErrTooLarge, got %v", err)
 	}
 }
 

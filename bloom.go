@@ -22,14 +22,25 @@ func New(n uint64, p float64) (*BloomFilter, error) {
 	if err := validate(n, p); err != nil {
 		return nil, err
 	}
-	m, k := optimalParams(n, p)
+	m, k, err := optimalParams(n, p)
+	if err != nil {
+		return nil, err
+	}
+	dataLen, err := checkedDataLen(m, 1)
+	if err != nil {
+		return nil, err
+	}
+	size, err := checkedInt(dataLen)
+	if err != nil {
+		return nil, err
+	}
 	f := &BloomFilter{}
 	f.m, f.k = m, k
 	f.hasher = hashing.FNV128a{}
 	f.hashID = f.hasher.ID()
 	f.kind = KindBloom
 	f.cellBits = 1
-	f.store = storage.NewMem(int(m / 8)) // m is a multiple of 64 → m/8 is integral
+	f.store = storage.NewMem(size)
 	return f, nil
 }
 

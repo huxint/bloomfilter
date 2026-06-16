@@ -23,14 +23,25 @@ func NewCounting(n uint64, p float64) (*CountingFilter, error) {
 	if err := validate(n, p); err != nil {
 		return nil, err
 	}
-	m, k := optimalParams(n, p)
+	m, k, err := optimalParams(n, p)
+	if err != nil {
+		return nil, err
+	}
+	dataLen, err := checkedDataLen(m, 4)
+	if err != nil {
+		return nil, err
+	}
+	size, err := checkedInt(dataLen)
+	if err != nil {
+		return nil, err
+	}
 	f := &CountingFilter{}
 	f.m, f.k = m, k
 	f.hasher = hashing.FNV128a{}
 	f.hashID = f.hasher.ID()
 	f.kind = KindCounting
 	f.cellBits = 4
-	f.store = storage.NewMem(int(m / 2)) // 4 bits/cell, m multiple of 64 → m/2 integral
+	f.store = storage.NewMem(size)
 	return f, nil
 }
 

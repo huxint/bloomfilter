@@ -141,6 +141,16 @@ func TestParseHeaderRejectsDegenerate(t *testing.T) {
 	if _, err := parseHeader(zeroM); !errors.Is(err, ErrCorrupt) {
 		t.Fatal("m==0 must be ErrCorrupt")
 	}
+	// k == 0 would make MightContain vacuously true for every key.
+	zeroK := append(header{kind: KindBloom, cellBits: 1, m: 64, k: 0, dataLen: 8}.marshal(), make([]byte, 8)...)
+	var b BloomFilter
+	if err := b.UnmarshalBinary(zeroK); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("UnmarshalBinary with k==0 must be ErrCorrupt, got %v", err)
+	}
+	var b2 BloomFilter
+	if _, err := b2.ReadFrom(bytes.NewReader(zeroK)); !errors.Is(err, ErrCorrupt) {
+		t.Fatalf("ReadFrom with k==0 must be ErrCorrupt, got %v", err)
+	}
 	// m so large that m*cellBits overflows uint64, wrapping dataLen to 0.
 	huge := header{kind: KindCounting, cellBits: 4, m: 1 << 62, n: 0, dataLen: 0}.marshal()
 	if _, err := parseHeader(huge); !errors.Is(err, ErrCorrupt) {
